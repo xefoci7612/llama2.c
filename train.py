@@ -29,6 +29,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from tinystories import Task
+from tinyshakespeare import ShakespeareTask
 
 # -----------------------------------------------------------------------------
 # I/O
@@ -46,6 +47,7 @@ wandb_run_name = "run" + datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
 # data
 batch_size = 128  # if gradient_accumulation_steps > 1, this is the micro-batch size
 max_seq_len = 256
+dataset = "tinystories"  # tinystories|tinyshakespeare
 # model
 dim = 288
 n_layers = 6
@@ -121,8 +123,9 @@ ctx = (
 )
 
 # task-specific setup
+task = {'tinystories': Task, 'tinyshakespeare': ShakespeareTask}[dataset]
 iter_batches = partial(
-    Task.iter_batches,
+    task.iter_batches,
     batch_size=batch_size,
     max_seq_len=max_seq_len,
     device=device,
@@ -142,7 +145,7 @@ model_args = dict(
     vocab_size=32000,
     multiple_of=multiple_of,
     max_seq_len=max_seq_len,
-    #dropout=dropout,
+    dropout=dropout,
 )  # start with model_args from command line
 if init_from == "scratch":
     # init a new model from scratch
@@ -179,7 +182,7 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-if init_from == "resume":
+if init_from == "resume" and "optimizer" in checkpoint:
     optimizer.load_state_dict(checkpoint["optimizer"])
 checkpoint = None  # free up memory
 
